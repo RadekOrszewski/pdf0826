@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lead Time — X Chart (XmR)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1419;--panel:#1a2129;--panel2:#232d38;--line:#2f3b47;
+    --txt:#e6edf3;--muted:#8b98a5;--accent:#4fb3ff;
+    --center:#3fd07f;--limit:#ff9f43;--signal:#ff5c5c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--txt);padding:24px}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:20px;max-width:900px;line-height:1.5}
+  .wrap{max-width:1160px;margin:0 auto}
+  .cards{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .card .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  .card .v{font-size:22px;font-weight:700;margin-top:4px}
+  .card .u{font-size:11px;color:var(--muted)}
+  .chartbox{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;height:520px;margin-bottom:14px}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-bottom:8px}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .swatch{width:22px;height:0;border-top:3px solid;display:inline-block}
+  .hint{font-size:12px;color:var(--muted);line-height:1.6}
+  .sig{color:var(--signal);font-weight:600}
+  code{background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Lead Time — wykres przebiegu (X chart / XmR)</h1>
+<div class="sub">Indywidualny wykres kontrolny (Individuals / X chart) czasu realizacji zgłoszeń wg metody Shewharta.
+Granice zmienności typowej wyznaczone jako średnia ± 2,66 × średni moving range. Dolna granica (LNPL) obcięta do 0.</div>
+
+<div class="cards" id="cards"></div>
+
+<div class="legend">
+  <span><i class="swatch" style="border-color:var(--accent)"></i> Lead time (X)</span>
+  <span><i class="swatch" style="border-color:var(--center)"></i> Średnia (CL)</span>
+  <span><i class="swatch" style="border-color:var(--limit);border-top-style:dashed"></i> UNPL / LNPL (±2,66·mR̄)</span>
+  <span><i class="swatch" style="border-color:var(--signal)"></i> Punkt poza granicami (sygnał)</span>
+</div>
+<div class="chartbox"><canvas id="chart"></canvas></div>
+
+<div class="hint" id="notes"></div>
+</div>
+
+<script src="data:text/javascript;base64,Y29uc3QgREFUQSA9IFt7ImlkIjogMSwgInN0YXJ0ZWQiOiAiMjAyMy0xMS0yOCIsICJjbG9zZWQiOiAiMjAyNC0wMS0wNSIsICJjeWNsZSI6IDM4fSwgeyJpZCI6IDIsICJzdGFydGVkIjogIjIwMjMtMTItMjAiLCAiY2xvc2VkIjogIjIwMjQtMDEtMTEiLCAiY3ljbGUiOiAyNH0sIHsiaWQiOiAzLCAic3RhcnRlZCI6ICIyMDI0LTAxLTAyIiwgImNsb3NlZCI6ICIyMDI0LTAxLTE2IiwgImN5Y2xlIjogMTR9LCB7ImlkIjogNCwgInN0YXJ0ZWQiOiAiMjAyNC0wMS0xMCIsICJjbG9zZWQiOiAiMjAyNC0wMS0xNyIsICJjeWNsZSI6IDl9LCB7ImlkIjogNSwgInN0YXJ0ZWQiOiAiMjAyNC0wMS0xOCIsICJjbG9zZWQiOiAiMjAyNC0wMS0yMiIsICJjeWNsZSI6IDR9LCB7ImlkIjogNiwgInN0YXJ0ZWQiOiAiMjAyNC0wMS0wMyIsICJjbG9zZWQiOiAiMjAyNC0wMS0yNiIsICJjeWNsZSI6IDI1fSwgeyJpZCI6IDcsICJzdGFydGVkIjogIjIwMjQtMDEtMTAiLCAiY2xvc2VkIjogIjIwMjQtMDEtMjkiLCAiY3ljbGUiOiAxOX0sIHsiaWQiOiA4LCAic3RhcnRlZCI6ICIyMDIzLTEyLTE5IiwgImNsb3NlZCI6ICIyMDI0LTAyLTA2IiwgImN5Y2xlIjogNTF9LCB7ImlkIjogOSwgInN0YXJ0ZWQiOiAiMjAyMy0xMi0yNiIsICJjbG9zZWQiOiAiMjAyNC0wMi0xMiIsICJjeWNsZSI6IDQ4fSwgeyJpZCI6IDEwLCAic3RhcnRlZCI6ICIyMDI0LTAyLTAyIiwgImNsb3NlZCI6ICIyMDI0LTAyLTE1IiwgImN5Y2xlIjogMTV9LCB7ImlkIjogMTEsICJzdGFydGVkIjogIjIwMjQtMDEtMjYiLCAiY2xvc2VkIjogIjIwMjQtMDItMTciLCAiY3ljbGUiOiAyMn0sIHsiaWQiOiAxMiwgInN0YXJ0ZWQiOiAiMjAyNC0wMS0wOSIsICJjbG9zZWQiOiAiMjAyNC0wMi0xOCIsICJjeWNsZSI6IDQyfSwgeyJpZCI6IDEzLCAic3RhcnRlZCI6ICIyMDI0LTAyLTAyIiwgImNsb3NlZCI6ICIyMDI0LTAyLTE5IiwgImN5Y2xlIjogMTd9LCB7ImlkIjogMTQsICJzdGFydGVkIjogIjIwMjQtMDItMTYiLCAiY2xvc2VkIjogIjIwMjQtMDItMjEiLCAiY3ljbGUiOiA3fSwgeyJpZCI6IDE1LCAic3RhcnRlZCI6ICIyMDI0LTAyLTIzIiwgImNsb3NlZCI6ICIyMDI0LTAyLTI4IiwgImN5Y2xlIjogNX0sIHsiaWQiOiAxNiwgInN0YXJ0ZWQiOiAiMjAyNC0wMi0yMCIsICJjbG9zZWQiOiAiMjAyNC0wMy0xMiIsICJjeWNsZSI6IDIwfSwgeyJpZCI6IDE3LCAic3RhcnRlZCI6ICIyMDI0LTAxLTEyIiwgImNsb3NlZCI6ICIyMDI0LTAzLTE0IiwgImN5Y2xlIjogNjN9LCB7ImlkIjogMTgsICJzdGFydGVkIjogIjIwMjQtMDMtMTMiLCAiY2xvc2VkIjogIjIwMjQtMDMtMTkiLCAiY3ljbGUiOiA2fSwgeyJpZCI6IDE5LCAic3RhcnRlZCI6ICIyMDI0LTAxLTI1IiwgImNsb3NlZCI6ICIyMDI0LTAzLTIwIiwgImN5Y2xlIjogNTZ9LCB7ImlkIjogMjAsICJzdGFydGVkIjogIjIwMjQtMDItMjgiLCAiY2xvc2VkIjogIjIwMjQtMDMtMjIiLCAiY3ljbGUiOiAyNH0sIHsiaWQiOiAyMSwgInN0YXJ0ZWQiOiAiMjAyNC0wMi0yOCIsICJjbG9zZWQiOiAiMjAyNC0wMy0yMiIsICJjeWNsZSI6IDIyfSwgeyJpZCI6IDIyLCAic3RhcnRlZCI6ICIyMDI0LTAyLTA2IiwgImNsb3NlZCI6ICIyMDI0LTAzLTI2IiwgImN5Y2xlIjogNTB9LCB7ImlkIjogMjMsICJzdGFydGVkIjogIjIwMjQtMDMtMjEiLCAiY2xvc2VkIjogIjIwMjQtMDMtMjciLCAiY3ljbGUiOiA4fSwgeyJpZCI6IDI0LCAic3RhcnRlZCI6ICIyMDI0LTAzLTI2IiwgImNsb3NlZCI6ICIyMDI0LTAzLTI4IiwgImN5Y2xlIjogMn0sIHsiaWQiOiAyNSwgInN0YXJ0ZWQiOiAiMjAyNC0wMy0yOCIsICJjbG9zZWQiOiAiMjAyNC0wMy0yOSIsICJjeWNsZSI6IDN9LCB7ImlkIjogMjYsICJzdGFydGVkIjogIjIwMjQtMDMtMjIiLCAiY2xvc2VkIjogIjIwMjQtMDMtMzAiLCAiY3ljbGUiOiA4fSwgeyJpZCI6IDI3LCAic3RhcnRlZCI6ICIyMDI0LTAyLTI2IiwgImNsb3NlZCI6ICIyMDI0LTA0LTAxIiwgImN5Y2xlIjogMzZ9LCB7ImlkIjogMjgsICJzdGFydGVkIjogIjIwMjQtMDMtMDYiLCAiY2xvc2VkIjogIjIwMjQtMDQtMDIiLCAiY3ljbGUiOiAyN30sIHsiaWQiOiAyOSwgInN0YXJ0ZWQiOiAiMjAyNC0wMy0xMyIsICJjbG9zZWQiOiAiMjAyNC0wNC0wOSIsICJjeWNsZSI6IDI5fSwgeyJpZCI6IDMwLCAic3RhcnRlZCI6ICIyMDI0LTAzLTIwIiwgImNsb3NlZCI6ICIyMDI0LTA0LTA5IiwgImN5Y2xlIjogMjB9XTsK"></script>
+<script>
+const vals=DATA.map(d=>d.cycle);
+const labels=DATA.map(d=>'#'+d.id);
+const n=vals.length;
+
+// average
+const avg=vals.reduce((a,b)=>a+b,0)/n;
+// moving ranges
+const mr=[]; for(let i=1;i<n;i++) mr.push(Math.abs(vals[i]-vals[i-1]));
+const amr=mr.reduce((a,b)=>a+b,0)/mr.length;
+
+// Shewhart individuals limits
+const UNPL=avg+2.66*amr;
+let LNPL=avg-2.66*amr; if(LNPL<0) LNPL=0;
+
+const fmt=x=>x.toFixed(1);
+document.getElementById('cards').innerHTML=[
+  ['Liczba punktów',n,''],
+  ['Średnia (CL)',fmt(avg),'dni'],
+  ['Średni mR (mR̄)',fmt(amr),'dni'],
+  ['UNPL (+2,66·mR̄)',fmt(UNPL),'dni'],
+  ['LNPL (−2,66·mR̄)',fmt(LNPL),'dni'],
+].map(([k,v,u])=>`<div class="card"><div class="k">${k}</div><div class="v">${v}</div><div class="u">${u}</div></div>`).join('');
+
+// signals: points outside limits
+const signalIdx=[];
+const ptColors=vals.map((v,i)=>{
+  const out = v>UNPL || v<LNPL;
+  if(out) signalIdx.push(i);
+  return out?getCss('--signal'):getCss('--accent');
+});
+function getCss(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+
+const flat=y=>labels.map(()=>y);
+
+new Chart(document.getElementById('chart'),{
+  type:'line',
+  data:{labels,datasets:[
+    {label:'UNPL',data:flat(UNPL),borderColor:getCss('--limit'),borderDash:[6,4],borderWidth:1.5,pointRadius:0,fill:false,tension:0},
+    {label:'LNPL',data:flat(LNPL),borderColor:getCss('--limit'),borderDash:[6,4],borderWidth:1.5,pointRadius:0,fill:false,tension:0},
+    {label:'CL',data:flat(avg),borderColor:getCss('--center'),borderWidth:2,pointRadius:0,fill:false,tension:0},
+    {label:'Lead time',data:vals,borderColor:getCss('--accent'),borderWidth:2,
+      pointBackgroundColor:ptColors,pointBorderColor:ptColors,
+      pointRadius:vals.map((v,i)=>signalIdx.includes(i)?7:4.5),
+      pointHoverRadius:9,tension:0,fill:false,order:0},
+  ]},
+  options:{
+    maintainAspectRatio:false,
+    plugins:{
+      legend:{display:false},
+      tooltip:{callbacks:{
+        title:items=>{const i=items[0].dataIndex;const d=DATA[i];return `#${d.id} · ${d.started} → ${d.closed}`;},
+        label:ctx=>{
+          if(ctx.dataset.label!=='Lead time') return `${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`;
+          const i=ctx.dataIndex;const v=vals[i];
+          const s=(v>UNPL||v<LNPL)?'  ⚠ sygnał':'';
+          return `Lead time: ${v} dni${s}`;
+        }
+      }}
+    },
+    scales:{
+      x:{ticks:{color:'#8b98a5',maxRotation:0,autoSkip:true},grid:{color:'#222c36'},
+         title:{display:true,text:'Zgłoszenie (kolejność zamknięcia)',color:'#8b98a5'}},
+      y:{beginAtZero:true,ticks:{color:'#8b98a5'},grid:{color:'#2f3b47'},
+         title:{display:true,text:'Lead time (dni)',color:'#8b98a5'}}
+    }
+  }
+});
+
+const sigList=signalIdx.map(i=>`#${DATA[i].id} (${vals[i]} dni)`).join(', ');
+document.getElementById('notes').innerHTML=`
+<b>Metoda:</b> wykres indywidualnych wartości (X chart z rodziny XmR). Linia centralna = średni lead time.
+Granice zmienności typowej (natural process limits): <code>CL ± 2,66 · mR̄</code>, gdzie mR̄ to średnia ruchomego rozstępu
+kolejnych punktów. Współczynnik 2,66 wynika ze stałych Shewharta (3/d₂, d₂=1,128 dla n=2).
+Górna granica URL dla wykresu mR wynosiłaby 3,268·mR̄.<br><br>
+<b>LNPL obcięty do 0</b> — obliczone −2,66·mR̄ = ${fmt(avg-2.66*amr)} dni, ale lead time nie może być ujemny, więc dolna granica = 0.<br><br>
+<b>Sygnały (punkty poza granicami):</b> ${signalIdx.length? '<span class="sig">'+sigList+'</span>' : 'brak — proces w granicach zmienności typowej.'}
+`;
+</script>
+</body>
+</html>
