@@ -1,1 +1,157 @@
-Star Trek is the best
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Czasy realizacji — Scatter plot</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#1a2129; --panel2:#232d38; --line:#2f3b47;
+    --txt:#e6edf3; --muted:#8b98a5; --accent:#4fb3ff;
+    --S:#4fb3ff; --M:#ffb454; --L:#ff6b9d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--txt);padding:24px}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:20px}
+  .wrap{display:grid;grid-template-columns:260px 1fr;gap:20px;max-width:1200px;margin:0 auto}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .panel h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 12px}
+  .grp{margin-bottom:22px}
+  label.row{display:flex;align-items:center;gap:9px;padding:6px 4px;cursor:pointer;font-size:14px;border-radius:6px}
+  label.row:hover{background:var(--panel2)}
+  input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
+  .chip{display:inline-flex;width:16px;height:16px;align-items:center;justify-content:center;font-size:13px}
+  .stat-tbl{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+  .stat-tbl th,.stat-tbl td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--line)}
+  .stat-tbl th:first-child,.stat-tbl td:first-child{text-align:left}
+  .stat-tbl thead th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase}
+  .chartbox{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;height:560px}
+  .hint{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.5}
+</style>
+</head>
+<body>
+<h1>Czasy realizacji 2024–25</h1>
+<div class="sub">Scatter plot czasów realizacji z liniami percentyli i średniej dla każdej kategorii rozmiaru.</div>
+<div class="wrap">
+  <div>
+    <div class="panel grp">
+      <h2>Filtruj rozmiar</h2>
+      <label class="row"><input type="checkbox" class="szf" value="S" checked><span class="chip" style="color:var(--S)">◆</span> S — mały</label>
+      <label class="row"><input type="checkbox" class="szf" value="M" checked><span class="chip" style="color:var(--M)">▲</span> M — średni</label>
+      <label class="row"><input type="checkbox" class="szf" value="L" checked><span class="chip" style="color:var(--L)">●</span> L — duży</label>
+    </div>
+    <div class="panel grp">
+      <h2>Linie odniesienia</h2>
+      <label class="row"><input type="checkbox" class="lnf" value="p50" checked> 50. percentyl (mediana)</label>
+      <label class="row"><input type="checkbox" class="lnf" value="p85" checked> 85. percentyl</label>
+      <label class="row"><input type="checkbox" class="lnf" value="p95"> 95. percentyl</label>
+      <label class="row"><input type="checkbox" class="lnf" value="avg"> Wartość średnia</label>
+    </div>
+    <div class="panel">
+      <h2>Statystyki</h2>
+      <table class="stat-tbl">
+        <thead><tr><th>Rozm.</th><th>n</th><th>P50</th><th>P85</th><th>P95</th><th>Śr.</th></tr></thead>
+        <tbody id="statBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div>
+    <div class="chartbox"><canvas id="chart"></canvas></div>
+    <div class="hint">Oś X: data ukończenia · Oś Y: czas realizacji (dni). Kategorie oznaczone różnymi ikonami: ◆ S, ▲ M, ● L. Linie odniesienia są liczone dla aktualnie widocznych kategorii i rysowane w ich kolorach.</div>
+  </div>
+</div>
+
+<script src="data:text/javascript;base64,Y29uc3QgREFUQSA9IFt7ImRhdGUiOiAiMjAyNC0wNy0xNSIsICJzaXplIjogIlMiLCAibGVhZCI6IDQ5fSwgeyJkYXRlIjogIjIwMjQtMDgtMjIiLCAic2l6ZSI6ICJTIiwgImxlYWQiOiA0OH0sIHsiZGF0ZSI6ICIyMDI0LTA5LTEwIiwgInNpemUiOiAiUyIsICJsZWFkIjogODd9LCB7ImRhdGUiOiAiMjAyNC0wOS0yNSIsICJzaXplIjogIk0iLCAibGVhZCI6IDU3fSwgeyJkYXRlIjogIjIwMjQtMTAtMDUiLCAic2l6ZSI6ICJNIiwgImxlYWQiOiAxNDh9LCB7ImRhdGUiOiAiMjAyNC0xMC0xNCIsICJzaXplIjogIlMiLCAibGVhZCI6IDUzfSwgeyJkYXRlIjogIjIwMjQtMTAtMjgiLCAic2l6ZSI6ICJTIiwgImxlYWQiOiA0NX0sIHsiZGF0ZSI6ICIyMDI0LTExLTE4IiwgInNpemUiOiAiTSIsICJsZWFkIjogMTQ1fSwgeyJkYXRlIjogIjIwMjQtMTItMDQiLCAic2l6ZSI6ICJMIiwgImxlYWQiOiAxMDV9LCB7ImRhdGUiOiAiMjAyNS0wMS0wOCIsICJzaXplIjogIlMiLCAibGVhZCI6IDV9LCB7ImRhdGUiOiAiMjAyNS0wMS0yMCIsICJzaXplIjogIkwiLCAibGVhZCI6IDE2M30sIHsiZGF0ZSI6ICIyMDI1LTAyLTE0IiwgInNpemUiOiAiUyIsICJsZWFkIjogNDN9LCB7ImRhdGUiOiAiMjAyNS0wMi0yNiIsICJzaXplIjogIk0iLCAibGVhZCI6IDQxNX0sIHsiZGF0ZSI6ICIyMDI1LTAzLTE1IiwgInNpemUiOiAiTCIsICJsZWFkIjogMTIzfSwgeyJkYXRlIjogIjIwMjUtMDQtMTAiLCAic2l6ZSI6ICJNIiwgImxlYWQiOiAxMDN9LCB7ImRhdGUiOiAiMjAyNS0wNS0wNSIsICJzaXplIjogIkwiLCAibGVhZCI6IDEwNH0sIHsiZGF0ZSI6ICIyMDI1LTA2LTEyIiwgInNpemUiOiAiTCIsICJsZWFkIjogMzAyfSwgeyJkYXRlIjogIjIwMjUtMDYtMjUiLCAic2l6ZSI6ICJMIiwgImxlYWQiOiAxNTh9LCB7ImRhdGUiOiAiMjAyNS0wNy0wMiIsICJzaXplIjogIkwiLCAibGVhZCI6IDk4fSwgeyJkYXRlIjogIjIwMjUtMDctMTEiLCAic2l6ZSI6ICJTIiwgImxlYWQiOiA1Mn0sIHsiZGF0ZSI6ICIyMDI1LTA3LTE4IiwgInNpemUiOiAiTSIsICJsZWFkIjogOTV9LCB7ImRhdGUiOiAiMjAyNS0wNy0yOSIsICJzaXplIjogIlMiLCAibGVhZCI6IDcwfSwgeyJkYXRlIjogIjIwMjUtMDgtMDMiLCAic2l6ZSI6ICJNIiwgImxlYWQiOiA5NX0sIHsiZGF0ZSI6ICIyMDI1LTA4LTE0IiwgInNpemUiOiAiTSIsICJsZWFkIjogMTAxfSwgeyJkYXRlIjogIjIwMjUtMDgtMjEiLCAic2l6ZSI6ICJNIiwgImxlYWQiOiA1N30sIHsiZGF0ZSI6ICIyMDI1LTA4LTI5IiwgInNpemUiOiAiTSIsICJsZWFkIjogNTd9LCB7ImRhdGUiOiAiMjAyNS0wOS0wOCIsICJzaXplIjogIlMiLCAibGVhZCI6IDUzfSwgeyJkYXRlIjogIjIwMjUtMDktMjIiLCAic2l6ZSI6ICJMIiwgImxlYWQiOiAxMzd9LCB7ImRhdGUiOiAiMjAyNS0xMC0wNCIsICJzaXplIjogIlMiLCAibGVhZCI6IDczfSwgeyJkYXRlIjogIjIwMjUtMTAtMTIiLCAic2l6ZSI6ICJNIiwgImxlYWQiOiA2MH0sIHsiZGF0ZSI6ICIyMDI1LTEwLTE5IiwgInNpemUiOiAiUyIsICJsZWFkIjogMTI2fSwgeyJkYXRlIjogIjIwMjUtMTAtMjciLCAic2l6ZSI6ICJNIiwgImxlYWQiOiA1N30sIHsiZGF0ZSI6ICIyMDI1LTExLTA1IiwgInNpemUiOiAiTCIsICJsZWFkIjogMTI0fSwgeyJkYXRlIjogIjIwMjUtMTEtMTUiLCAic2l6ZSI6ICJNIiwgImxlYWQiOiA3NX0sIHsiZGF0ZSI6ICIyMDI1LTExLTI1IiwgInNpemUiOiAiTSIsICJsZWFkIjogODl9LCB7ImRhdGUiOiAiMjAyNS0xMi0xMCIsICJzaXplIjogIlMiLCAibGVhZCI6IDQ0fV07Cg=="></script>
+<script>
+const COLORS={S:'#4fb3ff',M:'#ffb454',L:'#ff6b9d'};
+const ICON={S:'◆',M:'▲',L:'●'};
+const STYLE={S:'rectRot',M:'triangle',L:'circle'};
+const PCT_LABEL={p50:'P50',p85:'P85',p95:'P95',avg:'Śr'};
+
+function percentile(arr,p){
+  if(!arr.length) return null;
+  const s=[...arr].sort((a,b)=>a-b);
+  const idx=(p/100)*(s.length-1);
+  const lo=Math.floor(idx),hi=Math.ceil(idx);
+  if(lo===hi) return s[lo];
+  return s[lo]+(s[hi]-s[lo])*(idx-lo);
+}
+function mean(arr){return arr.length? arr.reduce((a,b)=>a+b,0)/arr.length : null;}
+
+const parsed = DATA.map(d=>({...d, t:new Date(d.date).getTime()}));
+const tMin=Math.min(...parsed.map(d=>d.t)), tMax=Math.max(...parsed.map(d=>d.t));
+
+let chart;
+function selectedSizes(){return [...document.querySelectorAll('.szf:checked')].map(c=>c.value);}
+function selectedLines(){return [...document.querySelectorAll('.lnf:checked')].map(c=>c.value);}
+
+function build(){
+  const sizes=selectedSizes();
+  const lines=selectedLines();
+  const scatter = sizes.map(sz=>{
+    const pts=parsed.filter(d=>d.size===sz).map(d=>({x:d.t,y:d.lead}));
+    return {type:'scatter',label:`${ICON[sz]} ${sz}`,data:pts,
+      pointStyle:STYLE[sz],pointRadius:7,pointHoverRadius:10,
+      backgroundColor:COLORS[sz]+'cc',borderColor:COLORS[sz],borderWidth:1.5,order:2};
+  });
+  const lineDs=[];
+  sizes.forEach(sz=>{
+    const vals=parsed.filter(d=>d.size===sz).map(d=>d.lead);
+    const calc={p50:percentile(vals,50),p85:percentile(vals,85),p95:percentile(vals,95),avg:mean(vals)};
+    lines.forEach(ln=>{
+      const y=calc[ln]; if(y==null) return;
+      lineDs.push({type:'line',label:`${sz} ${PCT_LABEL[ln]}=${y.toFixed(0)}`,
+        data:[{x:tMin,y},{x:tMax,y}],borderColor:COLORS[sz],
+        borderWidth:ln==='avg'?2.5:1.5,borderDash:ln==='avg'?[]:(ln==='p95'?[2,3]:(ln==='p85'?[8,4]:[4,4])),
+        pointRadius:0,fill:false,order:1});
+    });
+  });
+  const ds=[...lineDs,...scatter];
+  if(chart){chart.data.datasets=ds;chart.update();}
+  else{
+    chart=new Chart(document.getElementById('chart'),{
+      data:{datasets:ds},
+      options:{
+        maintainAspectRatio:false,
+        interaction:{mode:'nearest',intersect:true},
+        scales:{
+          x:{type:'time'!==undefined?'linear':'linear',
+             min:tMin,max:tMax,
+             ticks:{color:'#8b98a5',callback:v=>new Date(v).toLocaleDateString('pl-PL',{month:'short',year:'2-digit'})},
+             grid:{color:'#2f3b47'},title:{display:true,text:'Data ukończenia',color:'#8b98a5'}},
+          y:{beginAtZero:true,ticks:{color:'#8b98a5'},grid:{color:'#2f3b47'},
+             title:{display:true,text:'Czas realizacji (dni)',color:'#8b98a5'}}
+        },
+        plugins:{
+          legend:{labels:{color:'#e6edf3',usePointStyle:true,filter:i=>i.text.includes('◆')||i.text.includes('▲')||i.text.includes('●')}},
+          tooltip:{callbacks:{label:ctx=>{
+            if(ctx.dataset.type==='line') return ctx.dataset.label;
+            return `${new Date(ctx.parsed.x).toLocaleDateString('pl-PL')} · ${ctx.parsed.y} dni`;
+          }}}
+        }
+      }
+    });
+  }
+  buildStats();
+}
+
+function buildStats(){
+  const tb=document.getElementById('statBody');
+  const sel=selectedSizes();
+  tb.innerHTML=['S','M','L'].map(sz=>{
+    const vals=parsed.filter(d=>d.size===sz).map(d=>d.lead);
+    const dim=sel.includes(sz)?'':'opacity:.35';
+    const f=v=>v==null?'–':v.toFixed(0);
+    return `<tr style="${dim}"><td><span style="color:${COLORS[sz]}">${ICON[sz]}</span> ${sz}</td>
+      <td>${vals.length}</td><td>${f(percentile(vals,50))}</td><td>${f(percentile(vals,85))}</td>
+      <td>${f(percentile(vals,95))}</td><td>${f(mean(vals))}</td></tr>`;
+  }).join('');
+}
+
+document.querySelectorAll('.szf,.lnf').forEach(c=>c.addEventListener('change',build));
+build();
+</script>
+</body>
+</html>
