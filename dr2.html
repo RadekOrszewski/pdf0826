@@ -1,1 +1,189 @@
 
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delivery Rate (tygodniowo) — X Chart (XmR)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1419;--panel:#1a2129;--panel2:#232d38;--line:#2f3b47;
+    --txt:#e6edf3;--muted:#8b98a5;--accent:#4fb3ff;
+    --center:#3fd07f;--limit:#ff9f43;
+    --strong:#ff5c5c;--moderate:#ffb454;--weak:#ffe066;--trend:#c792ea;
+    --z1:rgba(63,208,127,.07);--z2:rgba(255,159,67,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--txt);padding:24px}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:20px;max-width:940px;line-height:1.5}
+  .wrap{max-width:1180px;margin:0 auto}
+  .cards{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .card .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  .card .v{font-size:22px;font-weight:700;margin-top:4px}
+  .card .u{font-size:11px;color:var(--muted)}
+  .chartbox{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;height:520px;margin-bottom:14px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-bottom:10px;align-items:center}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .swatch{width:22px;height:0;border-top:3px solid;display:inline-block}
+  .dot{width:12px;height:12px;border-radius:50%;display:inline-block}
+  .hint{font-size:12px;color:var(--muted);line-height:1.6}
+  code{background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:12px}
+  .sigtable{width:100%;border-collapse:collapse;font-size:13px;margin:6px 0 16px}
+  .sigtable th,.sigtable td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+  .sigtable thead th{color:var(--muted);font-size:11px;text-transform:uppercase;font-weight:600}
+  .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;color:#06121e}
+  .cnt{font-weight:700}
+  .ids{font-size:12px;color:var(--muted);line-height:1.7}
+  .banner{background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--muted);margin-bottom:18px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Delivery Rate — agregacja tygodniowa (X Chart / XmR)</h1>
+<div class="sub">Tempo dostarczania sumowane w tygodniach, tydzień liczony od pierwszego dnia danych. Wykluczone dni wolne:
+weekendy oraz polskie święta państwowe. Metodyka Shewharta identyczna jak w wersji dziennej: granice ± 2,66·mR̄, strefy 1/3 i 2/3, cztery reguły sygnałów.</div>
+
+<div class="banner" id="banner"></div>
+
+<div class="cards" id="cards"></div>
+
+<div class="legend">
+  <span><i class="swatch" style="border-color:var(--accent)"></i> DR tygodniowy</span>
+  <span><i class="swatch" style="border-color:var(--center)"></i> Średnia (CL)</span>
+  <span><i class="swatch" style="border-color:var(--limit);border-top-style:dashed"></i> Granice ±2,66·mR̄</span>
+  <span style="color:var(--muted)">| strefy:</span>
+  <span><i class="dot" style="background:var(--strong)"></i> silny</span>
+  <span><i class="dot" style="background:var(--moderate)"></i> umiarkowany</span>
+  <span><i class="dot" style="background:var(--weak)"></i> słaby</span>
+  <span><i class="dot" style="background:var(--trend)"></i> trend</span>
+</div>
+<div class="chartbox"><canvas id="chart"></canvas></div>
+
+<h2 style="font-size:15px;margin:18px 0 4px">Wykryte sygnały</h2>
+<table class="sigtable" id="sigTable">
+  <thead><tr><th>Typ sygnału</th><th>Reguła</th><th style="text-align:center">Liczba</th><th>Tygodnie</th></tr></thead>
+  <tbody></tbody>
+</table>
+
+<div class="hint" id="notes"></div>
+</div>
+
+<script src="data:text/javascript;base64,Y29uc3QgREFUQSA9IFt7IndlZWsiOiAxLCAic3RhcnQiOiAiMjAyNS0wMS0wNyIsICJlbmQiOiAiMjAyNS0wMS0xMyIsICJ0b3RhbCI6IDE3LCAid29ya2RheXMiOiA1fSwgeyJ3ZWVrIjogMiwgInN0YXJ0IjogIjIwMjUtMDEtMTQiLCAiZW5kIjogIjIwMjUtMDEtMjAiLCAidG90YWwiOiAxNSwgIndvcmtkYXlzIjogNX0sIHsid2VlayI6IDMsICJzdGFydCI6ICIyMDI1LTAxLTIxIiwgImVuZCI6ICIyMDI1LTAxLTI3IiwgInRvdGFsIjogMywgIndvcmtkYXlzIjogNX0sIHsid2VlayI6IDQsICJzdGFydCI6ICIyMDI1LTAxLTI4IiwgImVuZCI6ICIyMDI1LTAyLTAzIiwgInRvdGFsIjogMTcsICJ3b3JrZGF5cyI6IDV9LCB7IndlZWsiOiA1LCAic3RhcnQiOiAiMjAyNS0wMi0wNCIsICJlbmQiOiAiMjAyNS0wMi0xMCIsICJ0b3RhbCI6IDE3LCAid29ya2RheXMiOiA1fSwgeyJ3ZWVrIjogNiwgInN0YXJ0IjogIjIwMjUtMDItMTEiLCAiZW5kIjogIjIwMjUtMDItMTciLCAidG90YWwiOiAxNSwgIndvcmtkYXlzIjogNX0sIHsid2VlayI6IDcsICJzdGFydCI6ICIyMDI1LTAyLTE4IiwgImVuZCI6ICIyMDI1LTAyLTI0IiwgInRvdGFsIjogMjAsICJ3b3JrZGF5cyI6IDV9LCB7IndlZWsiOiA4LCAic3RhcnQiOiAiMjAyNS0wMi0yNSIsICJlbmQiOiAiMjAyNS0wMy0wMyIsICJ0b3RhbCI6IDE1LCAid29ya2RheXMiOiA1fSwgeyJ3ZWVrIjogOSwgInN0YXJ0IjogIjIwMjUtMDMtMDQiLCAiZW5kIjogIjIwMjUtMDMtMTAiLCAidG90YWwiOiA5LCAid29ya2RheXMiOiA1fSwgeyJ3ZWVrIjogMTAsICJzdGFydCI6ICIyMDI1LTAzLTExIiwgImVuZCI6ICIyMDI1LTAzLTE3IiwgInRvdGFsIjogMTksICJ3b3JrZGF5cyI6IDV9LCB7IndlZWsiOiAxMSwgInN0YXJ0IjogIjIwMjUtMDMtMTgiLCAiZW5kIjogIjIwMjUtMDMtMjQiLCAidG90YWwiOiAxNSwgIndvcmtkYXlzIjogNX0sIHsid2VlayI6IDEyLCAic3RhcnQiOiAiMjAyNS0wMy0yNSIsICJlbmQiOiAiMjAyNS0wMy0zMSIsICJ0b3RhbCI6IDgsICJ3b3JrZGF5cyI6IDV9LCB7IndlZWsiOiAxMywgInN0YXJ0IjogIjIwMjUtMDQtMDEiLCAiZW5kIjogIjIwMjUtMDQtMDciLCAidG90YWwiOiAxNCwgIndvcmtkYXlzIjogNX0sIHsid2VlayI6IDE0LCAic3RhcnQiOiAiMjAyNS0wNC0wOCIsICJlbmQiOiAiMjAyNS0wNC0xNCIsICJ0b3RhbCI6IDgsICJ3b3JrZGF5cyI6IDV9LCB7IndlZWsiOiAxNSwgInN0YXJ0IjogIjIwMjUtMDQtMTUiLCAiZW5kIjogIjIwMjUtMDQtMTkiLCAidG90YWwiOiAxMSwgIndvcmtkYXlzIjogNH1dOwo="></script>
+<script>
+const vals=DATA.map(d=>d.total);
+const labels=DATA.map(d=>'T'+d.week);
+const n=vals.length;
+const getCss=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+const avg=vals.reduce((a,b)=>a+b,0)/n;
+const mr=[]; for(let i=1;i<n;i++) mr.push(Math.abs(vals[i]-vals[i-1]));
+const amr=mr.reduce((a,b)=>a+b,0)/mr.length;
+
+const UNPL=avg+2.66*amr;
+let LNPL=avg-2.66*amr; const LNPLraw=LNPL; if(LNPL<0) LNPL=0;
+const sigma=2.66*amr/3;
+const clamp=x=>x<0?0:x;
+const U1=avg+sigma,U2=avg+2*sigma;
+const L1=clamp(avg-sigma),L2=clamp(avg-2*sigma);
+
+const fmt=x=>x.toFixed(1);
+document.getElementById('cards').innerHTML=[
+  ['Tygodnie',n,''],
+  ['Średnia (CL)',fmt(avg),'szt./tydz.'],
+  ['mR̄',fmt(amr),'szt.'],
+  ['UNPL',fmt(UNPL),'szt./tydz.'],
+  ['LNPL',fmt(LNPL),'szt./tydz.'],
+].map(([k,v,u])=>`<div class="card"><div class="k">${k}</div><div class="v">${v}</div><div class="u">${u}</div></div>`).join('');
+
+const partial=DATA.filter(d=>d.workdays<5).map(d=>`T${d.week} (${d.workdays} dni rob.)`);
+document.getElementById('banner').innerHTML=
+  `<b>Wykluczone dni wolne:</b> soboty, niedziele oraz święta PL (Nowy Rok 01.01, Trzech Króli 06.01; Wielkanoc 20–21.04 poza zakresem danych). `+
+  (partial.length?`<b>Tygodnie niepełne:</b> ${partial.join(', ')} — sumy z mniejszej liczby dni roboczych, interpretuj ostrożnie.`:'Wszystkie tygodnie mają pełne 5 dni roboczych.');
+
+const side=vals.map(v=>v>avg?1:(v<avg?-1:0));
+const strong=new Set(),moderate=new Set(),weak=new Set(),trend=new Set();
+vals.forEach((v,i)=>{if(v>UNPL||v<LNPL)strong.add(i);});
+for(let i=0;i<n;i++){for(const s of[1,-1]){if(i>=2){
+  const b=[i-2,i-1,i].filter(j=> s>0?vals[j]>U2:vals[j]<L2);
+  if(b.length>=2)b.forEach(j=>moderate.add(j));}}}
+for(let i=0;i<n;i++){for(const s of[1,-1]){if(i>=4){
+  const b=[i-4,i-3,i-2,i-1,i].filter(j=> s>0?vals[j]>U1:vals[j]<L1);
+  if(b.length>=3)b.forEach(j=>weak.add(j));}}}
+{let run=0,rs=0;for(let i=0;i<n;i++){
+  if(i>0&&side[i]===side[i-1]&&side[i]!==0)run++;else{run=1;rs=i;}
+  if(run>=8)for(let j=rs;j<=i;j++)trend.add(j);}}
+
+function ptColor(i){if(strong.has(i))return getCss('--strong');if(moderate.has(i))return getCss('--moderate');if(weak.has(i))return getCss('--weak');if(trend.has(i))return getCss('--trend');return getCss('--accent');}
+function ptSize(i){if(strong.has(i))return 8;if(moderate.has(i)||weak.has(i)||trend.has(i))return 6.5;return 5;}
+const flat=y=>labels.map(()=>y);
+const ptColors=vals.map((_,i)=>ptColor(i));
+const ptSizes=vals.map((_,i)=>ptSize(i));
+function band(top,bot,color){return[
+  {data:flat(top),borderColor:'transparent',pointRadius:0,fill:false,order:9},
+  {data:flat(bot),borderColor:'transparent',pointRadius:0,backgroundColor:color,fill:'-1',order:9}];}
+
+new Chart(document.getElementById('chart'),{
+  type:'line',
+  data:{labels,datasets:[
+    ...band(U2,U1,getCss('--z2')),...band(U1,avg,getCss('--z1')),
+    ...band(avg,L1,getCss('--z1')),...band(L1,L2,getCss('--z2')),
+    {label:'UNPL',data:flat(UNPL),borderColor:getCss('--limit'),borderDash:[6,4],borderWidth:1.5,pointRadius:0,fill:false},
+    {label:'LNPL',data:flat(LNPL),borderColor:getCss('--limit'),borderDash:[6,4],borderWidth:1.5,pointRadius:0,fill:false},
+    {label:'+2σ',data:flat(U2),borderColor:getCss('--line'),borderDash:[2,4],borderWidth:1,pointRadius:0,fill:false},
+    {label:'+1σ',data:flat(U1),borderColor:getCss('--line'),borderDash:[2,4],borderWidth:1,pointRadius:0,fill:false},
+    {label:'-1σ',data:flat(L1),borderColor:getCss('--line'),borderDash:[2,4],borderWidth:1,pointRadius:0,fill:false},
+    {label:'-2σ',data:flat(L2),borderColor:getCss('--line'),borderDash:[2,4],borderWidth:1,pointRadius:0,fill:false},
+    {label:'CL',data:flat(avg),borderColor:getCss('--center'),borderWidth:2,pointRadius:0,fill:false},
+    {label:'DR',data:vals,borderColor:getCss('--accent'),borderWidth:2,
+      pointBackgroundColor:ptColors,pointBorderColor:ptColors,
+      pointRadius:ptSizes,pointHoverRadius:10,tension:0,fill:false,order:0},
+  ]},
+  options:{
+    maintainAspectRatio:false,
+    plugins:{
+      legend:{display:false},
+      tooltip:{filter:i=>i.dataset.label==='DR'||['UNPL','LNPL','CL'].includes(i.dataset.label),
+        callbacks:{
+        title:items=>{const i=items[0].dataIndex;const d=DATA[i];return `Tydzień ${d.week}: ${d.start} → ${d.end}`;},
+        label:ctx=>{
+          if(ctx.dataset.label!=='DR')return `${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`;
+          const i=ctx.dataIndex;const tags=[];
+          if(strong.has(i))tags.push('silny');if(moderate.has(i))tags.push('umiarkowany');
+          if(weak.has(i))tags.push('słaby');if(trend.has(i))tags.push('trend');
+          const wd=DATA[i].workdays<5?` · ${DATA[i].workdays} dni rob.`:'';
+          return `DR: ${vals[i]} szt.${wd}${tags.length?'  ⚠ '+tags.join(', '):''}`;
+        }
+      }}
+    },
+    scales:{
+      x:{ticks:{color:'#8b98a5',maxRotation:0},grid:{color:'#222c36'},
+         title:{display:true,text:'Tydzień',color:'#8b98a5'}},
+      y:{beginAtZero:true,ticks:{color:'#8b98a5'},grid:{color:'transparent'},
+         title:{display:true,text:'Dostarczone (szt./tydzień)',color:'#8b98a5'}}
+    }
+  }
+});
+
+const idl=set=>[...set].sort((a,b)=>a-b).map(i=>'T'+DATA[i].week).join(', ')||'—';
+const rows=[
+  ['silny','--strong','Punkt poza granicami (±2,66·mR̄)',strong],
+  ['umiarkowany','--moderate','2 z 3 kolejnych po tej samej stronie, poza 2/3 pasma (±2σ)',moderate],
+  ['słaby','--weak','3 z 5 kolejnych po tej samej stronie, poza 1/3 pasma (±1σ)',weak],
+  ['trend','--trend','8 kolejnych po tej samej stronie linii centralnej',trend],
+];
+document.querySelector('#sigTable tbody').innerHTML=rows.map(([name,col,rule,set])=>
+  `<tr><td><span class="pill" style="background:${getCss(col)}">${name}</span></td>
+   <td>${rule}</td><td style="text-align:center" class="cnt">${set.size}</td><td class="ids">${idl(set)}</td></tr>`).join('');
+
+document.getElementById('notes').innerHTML=`
+<b>Agregacja:</b> suma dostaw w kolejnych 7-dniowych oknach od pierwszego dnia danych (07.01.2025, wtorek), liczona wyłącznie z dni roboczych — soboty, niedziele i święta PL pominięte.<br>
+<b>Metoda:</b> XmR na sumach tygodniowych. CL = ${fmt(avg)}, granice = <code>CL ± 2,66·mR̄</code>. Strefa 1σ = <code>${fmt(sigma)}</code> szt.<br>
+<b>LNPL:</b> −2,66·mR̄ = ${fmt(LNPLraw)} → obcięte do 0.<br>
+<b>Uwaga metodyczna:</b> tygodnie niepełne (mniej niż 5 dni roboczych) mają z natury niższą sumę; ich niska wartość nie musi oznaczać sygnału procesowego.
+`;
+</script>
+</body>
+</html>
