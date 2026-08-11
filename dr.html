@@ -1,1 +1,199 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delivery Rate — X Chart (XmR)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1419;--panel:#1a2129;--panel2:#232d38;--line:#2f3b47;
+    --txt:#e6edf3;--muted:#8b98a5;--accent:#4fb3ff;
+    --center:#3fd07f;--limit:#ff9f43;
+    --strong:#ff5c5c;--moderate:#ffb454;--weak:#ffe066;--trend:#c792ea;
+    --z1:rgba(63,208,127,.07);--z2:rgba(255,159,67,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--txt);padding:24px}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:20px;max-width:920px;line-height:1.5}
+  .wrap{max-width:1180px;margin:0 auto}
+  .cards{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .card .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  .card .v{font-size:22px;font-weight:700;margin-top:4px}
+  .card .u{font-size:11px;color:var(--muted)}
+  .chartbox{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;height:520px;margin-bottom:14px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-bottom:10px;align-items:center}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .swatch{width:22px;height:0;border-top:3px solid;display:inline-block}
+  .dot{width:12px;height:12px;border-radius:50%;display:inline-block}
+  .hint{font-size:12px;color:var(--muted);line-height:1.6}
+  code{background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:12px}
+  .sigtable{width:100%;border-collapse:collapse;font-size:13px;margin:6px 0 16px}
+  .sigtable th,.sigtable td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+  .sigtable thead th{color:var(--muted);font-size:11px;text-transform:uppercase;font-weight:600}
+  .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;color:#06121e}
+  .cnt{font-weight:700}
+  .ids{font-size:12px;color:var(--muted);line-height:1.7}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Delivery Rate — wykres przebiegu (X chart / XmR)</h1>
+<div class="sub">Dzienny wskaźnik tempa dostarczania (przepustowość) wg metody Shewharta — identyczna metodyka jak dla lead time.
+Granice zmienności typowej = średnia ± 2,66·mR̄. Pasmo CL→granica podzielone na strefy 1/3 (±1σ) i 2/3 (±2σ). LNPL obcięty do 0.</div>
 
+<div class="cards" id="cards"></div>
+
+<div class="legend">
+  <span><i class="swatch" style="border-color:var(--accent)"></i> Delivery rate</span>
+  <span><i class="swatch" style="border-color:var(--center)"></i> Średnia (CL)</span>
+  <span><i class="swatch" style="border-color:var(--limit);border-top-style:dashed"></i> Granice ±2,66·mR̄</span>
+  <span style="color:var(--muted)">| strefy:</span>
+  <span><i class="dot" style="background:var(--strong)"></i> silny</span>
+  <span><i class="dot" style="background:var(--moderate)"></i> umiarkowany</span>
+  <span><i class="dot" style="background:var(--weak)"></i> słaby</span>
+  <span><i class="dot" style="background:var(--trend)"></i> trend</span>
+</div>
+<div class="chartbox"><canvas id="chart"></canvas></div>
+
+<h2 style="font-size:15px;margin:18px 0 4px">Wykryte sygnały</h2>
+<table class="sigtable" id="sigTable">
+  <thead><tr><th>Typ sygnału</th><th>Reguła</th><th style="text-align:center">Liczba</th><th>Dni</th></tr></thead>
+  <tbody></tbody>
+</table>
+
+<div class="hint" id="notes"></div>
+</div>
+
+<script src="data:text/javascript;base64,Y29uc3QgREFUQSA9IFt7ImRhdGUiOiAiMjAyNS0wMS0wNyIsICJkciI6IDB9LCB7ImRhdGUiOiAiMjAyNS0wMS0wOCIsICJkciI6IDJ9LCB7ImRhdGUiOiAiMjAyNS0wMS0wOSIsICJkciI6IDEwfSwgeyJkYXRlIjogIjIwMjUtMDEtMTAiLCAiZHIiOiAzfSwgeyJkYXRlIjogIjIwMjUtMDEtMTEiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDEtMTIiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDEtMTMiLCAiZHIiOiAyfSwgeyJkYXRlIjogIjIwMjUtMDEtMTQiLCAiZHIiOiAzfSwgeyJkYXRlIjogIjIwMjUtMDEtMTUiLCAiZHIiOiA3fSwgeyJkYXRlIjogIjIwMjUtMDEtMTYiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDEtMTciLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDEtMTgiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDEtMTkiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDEtMjAiLCAiZHIiOiA1fSwgeyJkYXRlIjogIjIwMjUtMDEtMjEiLCAiZHIiOiAyfSwgeyJkYXRlIjogIjIwMjUtMDEtMjIiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDEtMjMiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDEtMjQiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDEtMjUiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDEtMjYiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDEtMjciLCAiZHIiOiAxfSwgeyJkYXRlIjogIjIwMjUtMDEtMjgiLCAiZHIiOiAxfSwgeyJkYXRlIjogIjIwMjUtMDEtMjkiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDEtMzAiLCAiZHIiOiA1fSwgeyJkYXRlIjogIjIwMjUtMDEtMzEiLCAiZHIiOiA0fSwgeyJkYXRlIjogIjIwMjUtMDItMDEiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDItMDIiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDItMDMiLCAiZHIiOiA3fSwgeyJkYXRlIjogIjIwMjUtMDItMDQiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDItMDUiLCAiZHIiOiAyfSwgeyJkYXRlIjogIjIwMjUtMDItMDYiLCAiZHIiOiAyfSwgeyJkYXRlIjogIjIwMjUtMDItMDciLCAiZHIiOiAxMn0sIHsiZGF0ZSI6ICIyMDI1LTAyLTA4IiwgImRyIjogMH0sIHsiZGF0ZSI6ICIyMDI1LTAyLTA5IiwgImRyIjogMH0sIHsiZGF0ZSI6ICIyMDI1LTAyLTEwIiwgImRyIjogMX0sIHsiZGF0ZSI6ICIyMDI1LTAyLTExIiwgImRyIjogMH0sIHsiZGF0ZSI6ICIyMDI1LTAyLTEyIiwgImRyIjogMH0sIHsiZGF0ZSI6ICIyMDI1LTAyLTEzIiwgImRyIjogMn0sIHsiZGF0ZSI6ICIyMDI1LTAyLTE0IiwgImRyIjogMTJ9LCB7ImRhdGUiOiAiMjAyNS0wMi0xNSIsICJkciI6IDB9LCB7ImRhdGUiOiAiMjAyNS0wMi0xNiIsICJkciI6IDB9LCB7ImRhdGUiOiAiMjAyNS0wMi0xNyIsICJkciI6IDF9LCB7ImRhdGUiOiAiMjAyNS0wMi0xOCIsICJkciI6IDB9LCB7ImRhdGUiOiAiMjAyNS0wMi0xOSIsICJkciI6IDB9LCB7ImRhdGUiOiAiMjAyNS0wMi0yMCIsICJkciI6IDN9LCB7ImRhdGUiOiAiMjAyNS0wMi0yMSIsICJkciI6IDExfSwgeyJkYXRlIjogIjIwMjUtMDItMjIiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDItMjMiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDItMjQiLCAiZHIiOiA2fSwgeyJkYXRlIjogIjIwMjUtMDItMjUiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDItMjYiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDItMjciLCAiZHIiOiA2fSwgeyJkYXRlIjogIjIwMjUtMDItMjgiLCAiZHIiOiA3fSwgeyJkYXRlIjogIjIwMjUtMDMtMDEiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDMtMDIiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDMtMDMiLCAiZHIiOiAyfSwgeyJkYXRlIjogIjIwMjUtMDMtMDQiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDMtMDUiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDMtMDYiLCAiZHIiOiAzfSwgeyJkYXRlIjogIjIwMjUtMDMtMDciLCAiZHIiOiA1fSwgeyJkYXRlIjogIjIwMjUtMDMtMDgiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDMtMDkiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDMtMTAiLCAiZHIiOiAxfSwgeyJkYXRlIjogIjIwMjUtMDMtMTEiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDMtMTIiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDMtMTMiLCAiZHIiOiA5fSwgeyJkYXRlIjogIjIwMjUtMDMtMTQiLCAiZHIiOiA3fSwgeyJkYXRlIjogIjIwMjUtMDMtMTUiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDMtMTYiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDMtMTciLCAiZHIiOiAzfSwgeyJkYXRlIjogIjIwMjUtMDMtMTgiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDMtMTkiLCAiZHIiOiAwfSwgeyJkYXRlIjogIjIwMjUtMDMtMjAiLCAiZHIiOiA0fSwgeyJkYXRlIjogIjIwMjUtMDMtMjEiLCAiZHIiOiAxMH0sIHsiZGF0ZSI6ICIyMDI1LTAzLTIyIiwgImRyIjogMH0sIHsiZGF0ZSI6ICIyMDI1LTAzLTIzIiwgImRyIjogMH0sIHsiZGF0ZSI6ICIyMDI1LTAzLTI0IiwgImRyIjogMX0sIHsiZGF0ZSI6ICIyMDI1LTAzLTI1IiwgImRyIjogMH0sIHsiZGF0ZSI6ICIyMDI1LTAzLTI2IiwgImRyIjogMH0sIHsiZGF0ZSI6ICIyMDI1LTAzLTI3IiwgImRyIjogNX0sIHsiZGF0ZSI6ICIyMDI1LTAzLTI4IiwgImRyIjogMX0sIHsiZGF0ZSI6ICIyMDI1LTAzLTI5IiwgImRyIjogMH0sIHsiZGF0ZSI6ICIyMDI1LTAzLTMwIiwgImRyIjogMH0sIHsiZGF0ZSI6ICIyMDI1LTAzLTMxIiwgImRyIjogMn0sIHsiZGF0ZSI6ICIyMDI1LTA0LTAxIiwgImRyIjogMH0sIHsiZGF0ZSI6ICIyMDI1LTA0LTAyIiwgImRyIjogMH0sIHsiZGF0ZSI6ICIyMDI1LTA0LTAzIiwgImRyIjogMn0sIHsiZGF0ZSI6ICIyMDI1LTA0LTA0IiwgImRyIjogMTF9LCB7ImRhdGUiOiAiMjAyNS0wNC0wNSIsICJkciI6IDB9LCB7ImRhdGUiOiAiMjAyNS0wNC0wNiIsICJkciI6IDB9LCB7ImRhdGUiOiAiMjAyNS0wNC0wNyIsICJkciI6IDF9LCB7ImRhdGUiOiAiMjAyNS0wNC0wOCIsICJkciI6IDB9LCB7ImRhdGUiOiAiMjAyNS0wNC0wOSIsICJkciI6IDB9LCB7ImRhdGUiOiAiMjAyNS0wNC0xMCIsICJkciI6IDV9LCB7ImRhdGUiOiAiMjAyNS0wNC0xMSIsICJkciI6IDJ9LCB7ImRhdGUiOiAiMjAyNS0wNC0xMiIsICJkciI6IDB9LCB7ImRhdGUiOiAiMjAyNS0wNC0xMyIsICJkciI6IDB9LCB7ImRhdGUiOiAiMjAyNS0wNC0xNCIsICJkciI6IDF9LCB7ImRhdGUiOiAiMjAyNS0wNC0xNSIsICJkciI6IDB9LCB7ImRhdGUiOiAiMjAyNS0wNC0xNiIsICJkciI6IDB9LCB7ImRhdGUiOiAiMjAyNS0wNC0xNyIsICJkciI6IDR9LCB7ImRhdGUiOiAiMjAyNS0wNC0xOCIsICJkciI6IDd9LCB7ImRhdGUiOiAiMjAyNS0wNC0xOSIsICJkciI6IDB9XTsK"></script>
+<script>
+const vals=DATA.map(d=>d.dr);
+const labels=DATA.map(d=>d.date.slice(5)); // MM-DD
+const n=vals.length;
+const getCss=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+const avg=vals.reduce((a,b)=>a+b,0)/n;
+const mr=[]; for(let i=1;i<n;i++) mr.push(Math.abs(vals[i]-vals[i-1]));
+const amr=mr.reduce((a,b)=>a+b,0)/mr.length;
+
+const UNPL=avg+2.66*amr;
+let LNPL=avg-2.66*amr; const LNPLraw=LNPL; if(LNPL<0) LNPL=0;
+
+const sigma=2.66*amr/3;
+const clamp=x=>x<0?0:x;
+const U1=avg+sigma, U2=avg+2*sigma;
+const L1=clamp(avg-sigma), L2=clamp(avg-2*sigma);
+
+const fmt=x=>x.toFixed(2);
+document.getElementById('cards').innerHTML=[
+  ['Dni',n,''],
+  ['Średnia (CL)',fmt(avg),'szt./dzień'],
+  ['mR̄',fmt(amr),'szt.'],
+  ['UNPL',fmt(UNPL),'szt./dzień'],
+  ['LNPL',fmt(LNPL),'szt./dzień'],
+].map(([k,v,u])=>`<div class="card"><div class="k">${k}</div><div class="v">${v}</div><div class="u">${u}</div></div>`).join('');
+
+const side=vals.map(v=>v>avg?1:(v<avg?-1:0));
+const strong=new Set(), moderate=new Set(), weak=new Set(), trend=new Set();
+
+vals.forEach((v,i)=>{ if(v>UNPL||v<LNPL) strong.add(i); });
+for(let i=0;i<n;i++){ for(const s of[1,-1]){ if(i>=2){
+  const w=[i-2,i-1,i]; const b=w.filter(j=> s>0?vals[j]>U2:vals[j]<L2);
+  if(b.length>=2) b.forEach(j=>moderate.add(j)); }}}
+for(let i=0;i<n;i++){ for(const s of[1,-1]){ if(i>=4){
+  const w=[i-4,i-3,i-2,i-1,i]; const b=w.filter(j=> s>0?vals[j]>U1:vals[j]<L1);
+  if(b.length>=3) b.forEach(j=>weak.add(j)); }}}
+{ let run=0,rs=0; for(let i=0;i<n;i++){
+  if(i>0&&side[i]===side[i-1]&&side[i]!==0) run++; else {run=1;rs=i;}
+  if(run>=8) for(let j=rs;j<=i;j++) trend.add(j);
+}}
+
+function ptColor(i){
+  if(strong.has(i))return getCss('--strong');
+  if(moderate.has(i))return getCss('--moderate');
+  if(weak.has(i))return getCss('--weak');
+  if(trend.has(i))return getCss('--trend');
+  return getCss('--accent');
+}
+function ptSize(i){
+  if(strong.has(i))return 7;
+  if(moderate.has(i)||weak.has(i)||trend.has(i))return 5.5;
+  return 3.5;
+}
+const flat=y=>labels.map(()=>y);
+const ptColors=vals.map((_,i)=>ptColor(i));
+const ptSizes=vals.map((_,i)=>ptSize(i));
+
+function band(top,bot,color){
+  return [
+    {data:flat(top),borderColor:'transparent',pointRadius:0,fill:false,order:9},
+    {data:flat(bot),borderColor:'transparent',pointRadius:0,backgroundColor:color,fill:'-1',order:9}
+  ];
+}
+
+new Chart(document.getElementById('chart'),{
+  type:'line',
+  data:{labels,datasets:[
+    ...band(U2,U1,getCss('--z2')),
+    ...band(U1,avg,getCss('--z1')),
+    ...band(avg,L1,getCss('--z1')),
+    ...band(L1,L2,getCss('--z2')),
+    {label:'UNPL',data:flat(UNPL),borderColor:getCss('--limit'),borderDash:[6,4],borderWidth:1.5,pointRadius:0,fill:false},
+    {label:'LNPL',data:flat(LNPL),borderColor:getCss('--limit'),borderDash:[6,4],borderWidth:1.5,pointRadius:0,fill:false},
+    {label:'+2σ',data:flat(U2),borderColor:getCss('--line'),borderDash:[2,4],borderWidth:1,pointRadius:0,fill:false},
+    {label:'+1σ',data:flat(U1),borderColor:getCss('--line'),borderDash:[2,4],borderWidth:1,pointRadius:0,fill:false},
+    {label:'-1σ',data:flat(L1),borderColor:getCss('--line'),borderDash:[2,4],borderWidth:1,pointRadius:0,fill:false},
+    {label:'-2σ',data:flat(L2),borderColor:getCss('--line'),borderDash:[2,4],borderWidth:1,pointRadius:0,fill:false},
+    {label:'CL',data:flat(avg),borderColor:getCss('--center'),borderWidth:2,pointRadius:0,fill:false},
+    {label:'Delivery rate',data:vals,borderColor:getCss('--accent'),borderWidth:1.5,
+      pointBackgroundColor:ptColors,pointBorderColor:ptColors,
+      pointRadius:ptSizes,pointHoverRadius:9,tension:0,fill:false,order:0},
+  ]},
+  options:{
+    maintainAspectRatio:false,
+    plugins:{
+      legend:{display:false},
+      tooltip:{filter:i=>i.dataset.label==='Delivery rate'||['UNPL','LNPL','CL'].includes(i.dataset.label),
+        callbacks:{
+        title:items=>{const i=items[0].dataIndex;return DATA[i].date;},
+        label:ctx=>{
+          if(ctx.dataset.label!=='Delivery rate') return `${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`;
+          const i=ctx.dataIndex; const tags=[];
+          if(strong.has(i))tags.push('silny'); if(moderate.has(i))tags.push('umiarkowany');
+          if(weak.has(i))tags.push('słaby'); if(trend.has(i))tags.push('trend');
+          return `Delivery rate: ${vals[i]} szt.${tags.length?'  ⚠ '+tags.join(', '):''}`;
+        }
+      }}
+    },
+    scales:{
+      x:{ticks:{color:'#8b98a5',maxRotation:0,autoSkip:true,maxTicksLimit:14},grid:{color:'#222c36'},
+         title:{display:true,text:'Dzień',color:'#8b98a5'}},
+      y:{beginAtZero:true,ticks:{color:'#8b98a5'},grid:{color:'transparent'},
+         title:{display:true,text:'Dostarczone (szt./dzień)',color:'#8b98a5'}}
+    }
+  }
+});
+
+const idl=set=>[...set].sort((a,b)=>a-b).map(i=>DATA[i].date).join(', ')||'—';
+const rows=[
+  ['silny','--strong','Punkt poza granicami (±2,66·mR̄)',strong],
+  ['umiarkowany','--moderate','2 z 3 kolejnych po tej samej stronie, poza 2/3 pasma (±2σ)',moderate],
+  ['słaby','--weak','3 z 5 kolejnych po tej samej stronie, poza 1/3 pasma (±1σ)',weak],
+  ['trend','--trend','8 kolejnych po tej samej stronie linii centralnej',trend],
+];
+document.querySelector('#sigTable tbody').innerHTML=rows.map(([name,col,rule,set])=>
+  `<tr><td><span class="pill" style="background:${getCss(col)}">${name}</span></td>
+   <td>${rule}</td><td style="text-align:center" class="cnt">${set.size}</td><td class="ids">${idl(set)}</td></tr>`).join('');
+
+document.getElementById('notes').innerHTML=`
+<b>Metoda:</b> wykres indywidualnych wartości (XmR) — ta sama metodyka Shewharta co dla lead time.
+Linia centralna = średnia dzienna przepustowość. Granice = <code>CL ± 2,66·mR̄</code> (2,66 = 3/d₂, d₂=1,128).<br>
+<b>Strefy:</b> odległość CL→granica dzielona na 3 równe strefy po 1σ = <code>${fmt(sigma)}</code> szt. Pasmo 1/3 = ±1σ, pasmo 2/3 = ±2σ.<br>
+<b>LNPL:</b> −2,66·mR̄ = ${fmt(LNPLraw)} → obcięte do 0 (przepustowość nie może być ujemna); dolne strefy również obcięte do 0.<br>
+<b>Priorytet oznaczeń:</b> kolor punktu = najsilniejszy spełniony sygnał (silny → umiarkowany → słaby → trend).
+`;
+</script>
+</body>
+</html>
