@@ -9,42 +9,59 @@
   :root{
     --bg:#0f1419;--panel:#1a2129;--panel2:#232d38;--line:#2f3b47;
     --txt:#e6edf3;--muted:#8b98a5;--accent:#4fb3ff;
-    --center:#3fd07f;--limit:#ff9f43;--signal:#ff5c5c;
+    --center:#3fd07f;--limit:#ff9f43;
+    --strong:#ff5c5c;--moderate:#ffb454;--weak:#ffe066;--trend:#c792ea;
+    --z1:rgba(63,208,127,.07);--z2:rgba(255,159,67,.06);
   }
   *{box-sizing:border-box}
   body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--txt);padding:24px}
   h1{font-size:22px;margin:0 0 4px}
-  .sub{color:var(--muted);font-size:13px;margin-bottom:20px;max-width:900px;line-height:1.5}
-  .wrap{max-width:1160px;margin:0 auto}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:20px;max-width:920px;line-height:1.5}
+  .wrap{max-width:1180px;margin:0 auto}
   .cards{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
   .card .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
   .card .v{font-size:22px;font-weight:700;margin-top:4px}
   .card .u{font-size:11px;color:var(--muted)}
   .chartbox{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;height:520px;margin-bottom:14px}
-  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-bottom:8px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-bottom:10px;align-items:center}
   .legend span{display:inline-flex;align-items:center;gap:7px}
   .swatch{width:22px;height:0;border-top:3px solid;display:inline-block}
+  .dot{width:12px;height:12px;border-radius:50%;display:inline-block}
   .hint{font-size:12px;color:var(--muted);line-height:1.6}
-  .sig{color:var(--signal);font-weight:600}
   code{background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:12px}
+  .sigtable{width:100%;border-collapse:collapse;font-size:13px;margin:6px 0 16px}
+  .sigtable th,.sigtable td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line)}
+  .sigtable thead th{color:var(--muted);font-size:11px;text-transform:uppercase;font-weight:600}
+  .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;color:#06121e}
+  .cnt{font-weight:700}
 </style>
 </head>
 <body>
 <div class="wrap">
 <h1>Lead Time — wykres przebiegu (X chart / XmR)</h1>
-<div class="sub">Indywidualny wykres kontrolny (Individuals / X chart) czasu realizacji zgłoszeń wg metody Shewharta.
-Granice zmienności typowej wyznaczone jako średnia ± 2,66 × średni moving range. Dolna granica (LNPL) obcięta do 0.</div>
+<div class="sub">Indywidualny wykres kontrolny czasu realizacji wg metody Shewharta. Granice zmienności typowej = średnia ± 2,66·mR̄.
+Pasmo między linią centralną a granicą podzielone na strefy 1/3 (±1σ) i 2/3 (±2σ). Dolna granica (LNPL) obcięta do 0.</div>
 
 <div class="cards" id="cards"></div>
 
 <div class="legend">
-  <span><i class="swatch" style="border-color:var(--accent)"></i> Lead time (X)</span>
+  <span><i class="swatch" style="border-color:var(--accent)"></i> Lead time</span>
   <span><i class="swatch" style="border-color:var(--center)"></i> Średnia (CL)</span>
-  <span><i class="swatch" style="border-color:var(--limit);border-top-style:dashed"></i> UNPL / LNPL (±2,66·mR̄)</span>
-  <span><i class="swatch" style="border-color:var(--signal)"></i> Punkt poza granicami (sygnał)</span>
+  <span><i class="swatch" style="border-color:var(--limit);border-top-style:dashed"></i> Granice ±2,66·mR̄</span>
+  <span style="color:var(--muted)">| strefy:</span>
+  <span><i class="dot" style="background:var(--strong)"></i> silny</span>
+  <span><i class="dot" style="background:var(--moderate)"></i> umiarkowany</span>
+  <span><i class="dot" style="background:var(--weak)"></i> słaby</span>
+  <span><i class="dot" style="background:var(--trend)"></i> trend</span>
 </div>
 <div class="chartbox"><canvas id="chart"></canvas></div>
+
+<h2 style="font-size:15px;margin:18px 0 4px">Wykryte sygnały</h2>
+<table class="sigtable" id="sigTable">
+  <thead><tr><th>Typ sygnału</th><th>Reguła</th><th style="text-align:center">Liczba</th><th>Punkty</th></tr></thead>
+  <tbody></tbody>
+</table>
 
 <div class="hint" id="notes"></div>
 </div>
@@ -54,79 +71,159 @@ Granice zmienności typowej wyznaczone jako średnia ± 2,66 × średni moving r
 const vals=DATA.map(d=>d.cycle);
 const labels=DATA.map(d=>'#'+d.id);
 const n=vals.length;
+const getCss=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 
-// average
 const avg=vals.reduce((a,b)=>a+b,0)/n;
-// moving ranges
 const mr=[]; for(let i=1;i<n;i++) mr.push(Math.abs(vals[i]-vals[i-1]));
 const amr=mr.reduce((a,b)=>a+b,0)/mr.length;
 
-// Shewhart individuals limits
 const UNPL=avg+2.66*amr;
-let LNPL=avg-2.66*amr; if(LNPL<0) LNPL=0;
+let LNPL=avg-2.66*amr; const LNPLraw=LNPL; if(LNPL<0) LNPL=0;
+
+// sigma = one-third of the CL->limit distance
+const sigma=2.66*amr/3;
+// zone edges (upper / lower), clamped at 0 on the low side
+const clamp=x=>x<0?0:x;
+const U1=avg+sigma, U2=avg+2*sigma;                 // +1σ, +2σ
+const L1=clamp(avg-sigma), L2=clamp(avg-2*sigma);   // -1σ, -2σ
 
 const fmt=x=>x.toFixed(1);
 document.getElementById('cards').innerHTML=[
-  ['Liczba punktów',n,''],
+  ['Punkty',n,''],
   ['Średnia (CL)',fmt(avg),'dni'],
-  ['Średni mR (mR̄)',fmt(amr),'dni'],
-  ['UNPL (+2,66·mR̄)',fmt(UNPL),'dni'],
-  ['LNPL (−2,66·mR̄)',fmt(LNPL),'dni'],
+  ['mR̄',fmt(amr),'dni'],
+  ['UNPL',fmt(UNPL),'dni'],
+  ['LNPL',fmt(LNPL),'dni'],
 ].map(([k,v,u])=>`<div class="card"><div class="k">${k}</div><div class="v">${v}</div><div class="u">${u}</div></div>`).join('');
 
-// signals: points outside limits
-const signalIdx=[];
-const ptColors=vals.map((v,i)=>{
-  const out = v>UNPL || v<LNPL;
-  if(out) signalIdx.push(i);
-  return out?getCss('--signal'):getCss('--accent');
-});
-function getCss(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+// ---- signal detection ----
+// side relative to CL
+const side=vals.map(v=>v>avg?1:(v<avg?-1:0));
+const strong=new Set(), moderate=new Set(), weak=new Set(), trend=new Set();
+
+// STRONG: outside natural process limits (>3σ)
+vals.forEach((v,i)=>{ if(v>UNPL||v<LNPL) strong.add(i); });
+
+// MODERATE: 2 of 3 consecutive on same side beyond 2/3 band (>2σ)
+for(let i=0;i<n;i++){
+  for(const s of [1,-1]){
+    // window ending at i, of length 3 (need i>=2), count points beyond 2σ on side s
+    if(i>=2){
+      const w=[i-2,i-1,i];
+      const beyond=w.filter(j=> s>0 ? vals[j]>U2 : vals[j]<L2);
+      if(beyond.length>=2) beyond.forEach(j=>moderate.add(j));
+    }
+  }
+}
+// WEAK: 3 of 5 consecutive on same side beyond 1/3 band (>1σ)
+for(let i=0;i<n;i++){
+  for(const s of [1,-1]){
+    if(i>=4){
+      const w=[i-4,i-3,i-2,i-1,i];
+      const beyond=w.filter(j=> s>0 ? vals[j]>U1 : vals[j]<L1);
+      if(beyond.length>=3) beyond.forEach(j=>weak.add(j));
+    }
+  }
+}
+// TREND: 8 consecutive on same side of CL
+{
+  let run=0, runStart=0;
+  for(let i=0;i<n;i++){
+    if(i>0 && side[i]===side[i-1] && side[i]!==0){ run++; }
+    else { run=1; runStart=i; }
+    if(run>=8){ for(let j=runStart;j<=i;j++) trend.add(j); }
+  }
+}
+
+// priority for coloring: strong > moderate > weak > trend > normal
+function ptColor(i){
+  if(strong.has(i)) return getCss('--strong');
+  if(moderate.has(i)) return getCss('--moderate');
+  if(weak.has(i)) return getCss('--weak');
+  if(trend.has(i)) return getCss('--trend');
+  return getCss('--accent');
+}
+function ptSize(i){
+  if(strong.has(i)) return 8;
+  if(moderate.has(i)||weak.has(i)||trend.has(i)) return 6.5;
+  return 4.5;
+}
 
 const flat=y=>labels.map(()=>y);
+const ptColors=vals.map((_,i)=>ptColor(i));
+const ptSizes=vals.map((_,i)=>ptSize(i));
+
+// zone shading via filled area datasets (between adjacent boundary lines)
+function band(top,bot,color){
+  return [
+    {data:flat(top),borderColor:'transparent',pointRadius:0,fill:false,order:9},
+    {data:flat(bot),borderColor:'transparent',pointRadius:0,backgroundColor:color,fill:'-1',order:9}
+  ];
+}
 
 new Chart(document.getElementById('chart'),{
   type:'line',
   data:{labels,datasets:[
-    {label:'UNPL',data:flat(UNPL),borderColor:getCss('--limit'),borderDash:[6,4],borderWidth:1.5,pointRadius:0,fill:false,tension:0},
-    {label:'LNPL',data:flat(LNPL),borderColor:getCss('--limit'),borderDash:[6,4],borderWidth:1.5,pointRadius:0,fill:false,tension:0},
-    {label:'CL',data:flat(avg),borderColor:getCss('--center'),borderWidth:2,pointRadius:0,fill:false,tension:0},
+    // shaded zones (drawn first / behind)
+    ...band(U2,U1,getCss('--z2')),   // +2σ..+1σ
+    ...band(U1,avg,getCss('--z1')),  // +1σ..CL
+    ...band(avg,L1,getCss('--z1')),  // CL..-1σ
+    ...band(L1,L2,getCss('--z2')),   // -1σ..-2σ
+    // boundary lines
+    {label:'UNPL',data:flat(UNPL),borderColor:getCss('--limit'),borderDash:[6,4],borderWidth:1.5,pointRadius:0,fill:false},
+    {label:'LNPL',data:flat(LNPL),borderColor:getCss('--limit'),borderDash:[6,4],borderWidth:1.5,pointRadius:0,fill:false},
+    {label:'+2σ',data:flat(U2),borderColor:getCss('--line'),borderDash:[2,4],borderWidth:1,pointRadius:0,fill:false},
+    {label:'+1σ',data:flat(U1),borderColor:getCss('--line'),borderDash:[2,4],borderWidth:1,pointRadius:0,fill:false},
+    {label:'-1σ',data:flat(L1),borderColor:getCss('--line'),borderDash:[2,4],borderWidth:1,pointRadius:0,fill:false},
+    {label:'-2σ',data:flat(L2),borderColor:getCss('--line'),borderDash:[2,4],borderWidth:1,pointRadius:0,fill:false},
+    {label:'CL',data:flat(avg),borderColor:getCss('--center'),borderWidth:2,pointRadius:0,fill:false},
+    // data line
     {label:'Lead time',data:vals,borderColor:getCss('--accent'),borderWidth:2,
       pointBackgroundColor:ptColors,pointBorderColor:ptColors,
-      pointRadius:vals.map((v,i)=>signalIdx.includes(i)?7:4.5),
-      pointHoverRadius:9,tension:0,fill:false,order:0},
+      pointRadius:ptSizes,pointHoverRadius:10,tension:0,fill:false,order:0},
   ]},
   options:{
     maintainAspectRatio:false,
     plugins:{
       legend:{display:false},
-      tooltip:{callbacks:{
+      tooltip:{filter:i=>i.dataset.label==='Lead time'||['UNPL','LNPL','CL'].includes(i.dataset.label),
+        callbacks:{
         title:items=>{const i=items[0].dataIndex;const d=DATA[i];return `#${d.id} · ${d.started} → ${d.closed}`;},
         label:ctx=>{
           if(ctx.dataset.label!=='Lead time') return `${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`;
-          const i=ctx.dataIndex;const v=vals[i];
-          const s=(v>UNPL||v<LNPL)?'  ⚠ sygnał':'';
-          return `Lead time: ${v} dni${s}`;
+          const i=ctx.dataIndex; const tags=[];
+          if(strong.has(i))tags.push('silny'); if(moderate.has(i))tags.push('umiarkowany');
+          if(weak.has(i))tags.push('słaby'); if(trend.has(i))tags.push('trend');
+          return `Lead time: ${vals[i]} dni${tags.length?'  ⚠ '+tags.join(', '):''}`;
         }
       }}
     },
     scales:{
       x:{ticks:{color:'#8b98a5',maxRotation:0,autoSkip:true},grid:{color:'#222c36'},
          title:{display:true,text:'Zgłoszenie (kolejność zamknięcia)',color:'#8b98a5'}},
-      y:{beginAtZero:true,ticks:{color:'#8b98a5'},grid:{color:'#2f3b47'},
+      y:{beginAtZero:true,ticks:{color:'#8b98a5'},grid:{color:'transparent'},
          title:{display:true,text:'Lead time (dni)',color:'#8b98a5'}}
     }
   }
 });
 
-const sigList=signalIdx.map(i=>`#${DATA[i].id} (${vals[i]} dni)`).join(', ');
+// ---- signals table ----
+const idl=set=>[...set].sort((a,b)=>a-b).map(i=>'#'+DATA[i].id).join(', ')||'—';
+const rows=[
+  ['silny','--strong','Punkt poza granicami (±2,66·mR̄)',strong],
+  ['umiarkowany','--moderate','2 z 3 kolejnych po tej samej stronie, poza 2/3 pasma (±2σ)',moderate],
+  ['słaby','--weak','3 z 5 kolejnych po tej samej stronie, poza 1/3 pasma (±1σ)',weak],
+  ['trend','--trend','8 kolejnych po tej samej stronie linii centralnej',trend],
+];
+document.querySelector('#sigTable tbody').innerHTML=rows.map(([name,col,rule,set])=>
+  `<tr><td><span class="pill" style="background:${getCss(col)}">${name}</span></td>
+   <td>${rule}</td><td style="text-align:center" class="cnt">${set.size}</td><td>${idl(set)}</td></tr>`).join('');
+
 document.getElementById('notes').innerHTML=`
-<b>Metoda:</b> wykres indywidualnych wartości (X chart z rodziny XmR). Linia centralna = średni lead time.
-Granice zmienności typowej (natural process limits): <code>CL ± 2,66 · mR̄</code>, gdzie mR̄ to średnia ruchomego rozstępu
-kolejnych punktów. Współczynnik 2,66 wynika ze stałych Shewharta (3/d₂, d₂=1,128 dla n=2).
-Górna granica URL dla wykresu mR wynosiłaby 3,268·mR̄.<br><br>
-<b>LNPL obcięty do 0</b> — obliczone −2,66·mR̄ = ${fmt(avg-2.66*amr)} dni, ale lead time nie może być ujemny, więc dolna granica = 0.<br><br>
-<b>Sygnały (punkty poza granicami):</b> ${signalIdx.length? '<span class="sig">'+sigList+'</span>' : 'brak — proces w granicach zmienności typowej.'}
+<b>Strefy:</b> odległość CL→granica (2,66·mR̄) dzielona na trzy równe strefy po 1σ = <code>${fmt(sigma)}</code> dnia.
+Pasmo 1/3 = ±1σ, pasmo 2/3 = ±2σ.<br>
+<b>LNPL:</b> −2,66·mR̄ = ${fmt(LNPLraw)} dnia → obcięte do 0 (lead time nie może być ujemny). Dolne strefy −1σ/−2σ również obcięte do 0.<br>
+<b>Priorytet oznaczeń:</b> gdy punkt spełnia kilka reguł, kolor odpowiada najsilniejszemu sygnałowi (silny → umiarkowany → słaby → trend).
 `;
 </script>
 </body>
